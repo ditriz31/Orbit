@@ -1,4 +1,4 @@
-; Installer Orbit (Inno Setup 6). Dibangun oleh build.ps1; jangan dijalankan sebelum PyInstaller selesai.
+; Orbit installer (Inno Setup 6). Built by build.ps1; run PyInstaller first.
 #define AppName "Orbit"
 #ifndef AppVersion
   #define AppVersion "1.0.0"
@@ -14,7 +14,7 @@ AppPublisherURL=https://github.com/ditriz31/Orbit
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
-; dipasang per pengguna: tidak perlu hak administrator
+; per-user install: no administrator rights needed
 PrivilegesRequired=lowest
 OutputDir=..\dist
 OutputBaseFilename=Orbit-Setup-{#AppVersion}
@@ -37,7 +37,7 @@ Source: "..\dist\Orbit\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
-; nama dan argumen sama dengan shortcut yang dibuat app sendiri dari Setting
+; same name and arguments as the shortcut the app itself creates from Setting
 Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--startup"; WorkingDir: "{app}"; Tasks: autostart
 
 [Run]
@@ -47,11 +47,11 @@ Filename: "{app}\{#AppExe}"; Description: "Launch Orbit now"; Flags: nowait post
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#AppExe}"; Flags: runhidden; RunOnceId: "StopOrbit"
 
 [UninstallDelete]
-; shortcut autostart bisa juga dibuat dari Setting, jadi hapus walau task tidak dipilih saat install
+; the autostart shortcut can also be created from Setting, so remove it even if the task was not selected
 Type: files; Name: "{userstartup}\{#AppName}.lnk"
 
 [Code]
-// tutup Orbit yang sedang jalan supaya file-nya bisa ditimpa saat update
+// close a running Orbit so its files can be replaced during an update
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;

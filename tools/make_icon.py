@@ -1,4 +1,4 @@
-"""Buat assets/orbit.ico dari ikon tray yang digambar di orbit.pyw."""
+"""Create assets/orbit.ico from the tray icon drawn in orbit.pyw."""
 import io
 import sys
 from pathlib import Path

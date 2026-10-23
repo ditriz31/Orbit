@@ -1,4 +1,4 @@
-"""Buat gambar dan GIF demo untuk README (docs/). Memakai data contoh, bukan config pengguna."""
+"""Create the README pictures and demo GIF (docs/). Uses sample data, not the user's config."""
 import io
 import math
 import os
@@ -9,7 +9,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-os.environ["APPDATA"] = tempfile.mkdtemp()  # jangan sentuh config asli
+os.environ["APPDATA"] = tempfile.mkdtemp()  # never touch the real config
 src = ROOT / "orbit.pyw"
 fw = {"__name__": "orbit", "__file__": str(src)}
 exec(compile(src.read_text(encoding="utf-8"), str(src), "exec"), fw)
@@ -28,7 +28,7 @@ DEMO = [("Documents", "Documents"), ("Downloads", "Downloads"), ("Projects", "Do
 slots = []
 for name, real in DEMO:
     fake = rf"C:\Users\you\{name}" if real else r"C:\Users\you\Documents\Notes.txt"
-    # ikon diambil dari folder asli yang setara, path yang ditampilkan tetap contoh
+    # icons come from the matching real folders; the paths shown stay generic
     real_path = home / real if real else Path(sys.executable)
     fw["_icon_cache"][fake] = fw["path_icon"](str(real_path))
     slots.append({"name": name, "path": fake})
@@ -83,17 +83,17 @@ VIDEO_FILES = [("Holiday.mp4", (230, 120, 70)), ("Tutorial.mp4", (70, 140, 220))
 
 
 def explorer(p, w, h, slot, t):
-    """Jendela File Explorer tiruan (Windows 11, mode gelap) yang membuka folder slot."""
+    """A mock File Explorer window (Windows 11, dark mode) showing the slot's folder."""
     if t <= 0:
         return
     ww, wh = 540, 330
     p.save()
     p.setOpacity(t)
     p.translate(w / 2, h / 2 - 20)
-    s = 0.94 + 0.06 * t  # animasi buka jendela Windows: sedikit membesar sambil muncul
+    s = 0.94 + 0.06 * t  # Windows open animation: grow slightly while fading in
     p.scale(s, s)
     p.translate(-ww / 2, -wh / 2)
-    # bayangan + badan jendela
+    # shadow + window body
     p.setPen(Qt.NoPen)
     p.setBrush(QColor(0, 0, 0, 90))
     p.drawRoundedRect(QRectF(4, 8, ww, wh), 10, 10)
@@ -101,7 +101,7 @@ def explorer(p, w, h, slot, t):
     p.setPen(QPen(QColor(70, 70, 70), 1))
     p.drawRoundedRect(QRectF(0, 0, ww, wh), 8, 8)
     p.setPen(Qt.NoPen)
-    # title bar: ikon folder, nama, tombol jendela
+    # title bar: folder icon, name, window buttons
     icon = fw["path_icon"](slot["path"])
     p.drawPixmap(QRectF(12, 9, 16, 16), icon, QRectF(icon.rect()))
     p.setPen(QColor(235, 235, 235))
@@ -147,10 +147,10 @@ def explorer(p, w, h, slot, t):
             p.drawRoundedRect(QRectF(6, y + 2, 3, 12), 1.5, 1.5)
         p.setPen(QColor(230, 230, 230))
         p.drawText(QRectF(18, y - 3, 110, 22), Qt.AlignVCenter, name)
-    # isi folder: thumbnail video
+    # folder contents: video thumbnails
     for i, (name, col) in enumerate(VIDEO_FILES):
         x, y = 148 + (i % 3) * 128, 84 + (i // 3) * 118
-        # warna polos: gradasi jadi bergaris setelah dikompres ke palet GIF
+        # flat colors: gradients band after quantizing to the GIF palette
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(*col))
         p.drawRoundedRect(QRectF(x, y, 112, 70), 4, 4)
@@ -217,7 +217,7 @@ add(frame(W, H, cur=(cx, cy), caption="Hold Alt + Q"), 900)
 for i in range(1, 7):
     add(frame(W, H, t=i / 6, cur=(cx, cy), caption="Hold Alt + Q"), 30)
 add(frame(W, H, t=1, cur=(cx, cy), caption="Move the mouse toward a folder"), 700)
-# kursor berputar melewati beberapa irisan
+# the cursor sweeps across several slots
 for k in range(0, 34):
     ang = math.radians(-90 + k * 7)
     r = 150
@@ -236,14 +236,14 @@ add(frame(W, H, cur=(x, y), caption=opened, win=(slots[hv], 1)), 1800)
 for i in range(4, -1, -1):
     add(frame(W, H, cur=(x, y), caption=opened, win=(slots[hv], i / 5)), 30)
 add(frame(W, H, cur=(cx, cy)), 400)
-# batal: lepas di tengah
+# cancel: release in the center
 for i in range(1, 7):
     add(frame(W, H, t=i / 6, cur=(cx, cy), caption="Release in the center to cancel"), 30)
 add(frame(W, H, t=1, cur=(cx, cy), caption="Release in the center to cancel"), 1300)
 for i in range(5, -1, -1):
     add(frame(W, H, t=i / 5, cur=(cx, cy), caption="Release in the center to cancel"), 30)
 add(frame(W, H, cur=(cx, cy), caption="Nothing opens"), 900)
-# scroll ganti halaman
+# scroll to switch pages
 for i in range(1, 7):
     add(frame(W, H, t=i / 6, cur=(cx, cy), caption="Scroll to switch pages"), 30)
 add(frame(W, H, t=1, page=0, cur=(cx, cy), caption="Scroll to switch pages"), 900)
@@ -251,14 +251,14 @@ add(frame(W, H, t=1, page=1, cur=(cx, cy), caption="Scroll to switch pages"), 13
 for i in range(5, -1, -1):
     add(frame(W, H, t=i / 5, page=1, cur=(cx, cy), caption="Scroll to switch pages"), 30)
 
-# dithering supaya gradasi latar tidak terlihat patah-patah di palet GIF yang hanya 256 warna
+# dithering so the background gradient doesn't band in the 256-color GIF palette
 pal = [f.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG) for f in frames]
 pal[0].save(OUT / "demo-usage.gif", save_all=True, append_images=pal[1:], duration=durations, loop=0, optimize=True)
 
-# --- gambar utama
+# --- main picture
 frame(900, 600, t=1, hover=1, cur=None, dim=True).save(OUT / "preview.png")
 
-# --- deretan tema
+# --- theme presets
 names = ["Dark", "Midnight Blue", "Neon Purple", "Crimson", "Emerald", "Gold",
          "Sakura", "Cyberpunk", "Dracula", "Nord", "Mint", "Light"]
 cell = 250
@@ -281,7 +281,7 @@ for i, name in enumerate(names):
 p.end()
 to_pil(sheet).save(OUT / "theme-presets.png")
 
-# --- jendela Setting
+# --- Setting window
 cfg = fw["default_config"]()
 cfg["wheels"][0].update(title=TITLE, pages=PAGES, theme=fw["theme_from_preset"]("Midnight Blue"))
 cfg["wheels"].append(fw["new_wheel"]("Work", {"mods": ["alt"], "vk": 0x57}, "Work", slots[:4]))

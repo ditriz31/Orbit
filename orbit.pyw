@@ -1,9 +1,9 @@
-"""Orbit: menu melingkar (wheel) untuk membuka folder/file lewat hotkey.
+"""Orbit: a radial menu (wheel) that opens folders and files from a hotkey.
 
-Bisa ada beberapa wheel, masing-masing dengan hotkey sendiri (tidak boleh sama).
-Tahan hotkey -> wheel muncul -> arahkan mouse ke irisan -> lepas hotkey -> folder/file terbuka.
-Lepas saat kursor di tengah (atau tekan Esc / klik kanan) -> wheel tertutup tanpa membuka apa pun.
-Scroll mouse saat wheel terbuka -> pindah halaman.
+There can be several wheels, each with its own hotkey (no two may share one).
+Hold the hotkey -> the wheel appears -> point the mouse at a slot -> release -> the folder/file opens.
+Release with the cursor in the center (or press Esc / right-click) -> the wheel closes, nothing opens.
+Scroll while the wheel is open -> switch pages.
 """
 import copy
 import ctypes
@@ -33,17 +33,17 @@ from PySide6.QtWidgets import (
 
 APP_NAME = "Orbit"
 APP_VERSION = "1.0.0"
-FROZEN = getattr(sys, "frozen", False)  # dijalankan sebagai exe hasil PyInstaller
-# folder program: tempat exe (versi build) atau tempat file .pyw ini
+FROZEN = getattr(sys, "frozen", False)  # running as a PyInstaller exe
+# program folder: where the exe (built version) or this .pyw file lives
 APP_DIR = Path(sys.executable).parent if FROZEN else Path(__file__).resolve().parent
 CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / APP_NAME
 CONFIG_PATH = CONFIG_DIR / "config.json"
-LEGACY_NAME = "FolderWheel"  # nama lama aplikasi ini; pengaturan dan autostart-nya dipindahkan otomatis
+LEGACY_NAME = "FolderWheel"  # this app's former name; its settings and autostart are migrated automatically
 LEGACY_CONFIG_DIR = CONFIG_DIR.parent / LEGACY_NAME
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 MAX_SLOTS = 12
 
-R_IN, R_OUT = 78, 215  # radius lingkaran tengah (zona batal) dan tepi luar wheel
+R_IN, R_OUT = 78, 215  # radius of the center circle (cancel zone) and of the wheel edge
 
 
 # ---------------------------------------------------------------- config
@@ -68,7 +68,7 @@ def default_config():
     }
 
 
-# preset warna: irisan, irisan yang disorot, lingkaran tengah
+# color presets: slice, highlighted slice, center circle
 THEMES = {
     "Dark": ("#121216", "#f5f5f5", "#08080a"),
     "Light": ("#eeeef2", "#1e1e24", "#ffffff"),
@@ -105,7 +105,7 @@ def theme_from_preset(name, base=None):
 
 
 def new_wheel(name, hotkey, title, slots=()):
-    # title: teks di tengah wheel saat tidak ada slot disorot
+    # title: text in the wheel center while no slot is highlighted
     return {"name": name, "hotkey": hotkey, "title": title, "theme": theme_from_preset("Dark"),
             "pages": [{"name": "Main", "slots": list(slots)}]}
 
@@ -132,15 +132,15 @@ def slot_count(cfg):
 def _read_config(path):
     cfg = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(cfg, dict):
-        raise ValueError("format config tidak dikenal")
+        raise ValueError("unknown config format")
     if "wheels" not in cfg and isinstance(cfg.get("pages"), list):
-        # config versi lama (satu wheel): hotkey/title/pages ada di level atas
+        # old config format (single wheel): hotkey/title/pages at the top level
         default = default_config()["wheels"][0]
         cfg["wheels"] = [new_wheel("Wheel 1", cfg.pop("hotkey", default["hotkey"]),
                                    cfg.pop("title", default["title"]))]
         cfg["wheels"][0]["pages"] = cfg.pop("pages")
     if not isinstance(cfg.get("wheels"), list) or not cfg["wheels"]:
-        raise ValueError("format config tidak dikenal")
+        raise ValueError("unknown config format")
     base = default_config()
     base.update(cfg)
     for w in base["wheels"]:
@@ -151,27 +151,27 @@ def _read_config(path):
 
 
 def _migrate_legacy_config():
-    """Salin pengaturan dari folder nama lama (FolderWheel) kalau Orbit belum punya pengaturan sendiri."""
-    # cek file-nya, bukan foldernya: log() sudah membuat folder Orbit sebelum fungsi ini dipanggil
+    """Copy settings from the old-name folder (FolderWheel) if Orbit has no settings of its own yet."""
+    # check the file, not the folder: log() has already created the Orbit folder by now
     if CONFIG_PATH.exists() or BACKUP_PATH.exists() or not (LEGACY_CONFIG_DIR / "config.json").exists():
         return
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     for name in ("config.json", "config.bak.json"):
         if (LEGACY_CONFIG_DIR / name).exists():
             shutil.copy2(LEGACY_CONFIG_DIR / name, CONFIG_DIR / name)
-    log(f"pengaturan dipindahkan dari {LEGACY_CONFIG_DIR}")
+    log(f"settings migrated from {LEGACY_CONFIG_DIR}")
 
 
 def load_config(retries=12, delay=0.5, startup=False):
-    """Return (config, status): "ok", "new" (belum pernah ada config) atau "fallback".
+    """Return (config, status): "ok", "new" (no config yet) or "fallback".
 
-    Config yang sudah ada tidak pernah ditimpa di sini. Saat login Windows, file bisa sesaat gagal
-    dibaca; dulu kondisi itu membuat app jalan dengan pengaturan bawaan. Sekarang dicoba ulang beberapa
-    kali, lalu cadangan; kalau tetap gagal hasilnya "fallback" (default, hanya di memori) dan app
-    terus mencoba memuat ulang di belakang layar.
+    An existing config is never overwritten here. Right after signing in to Windows the file can be
+    briefly unreadable; that used to start the app with default settings. Now it retries a few times,
+    then tries the backup; if that fails too the result is "fallback" (defaults, in memory only) and
+    the app keeps retrying in the background.
     """
     if startup:
-        # saat login folder AppData pun bisa belum siap; tunggu dulu sebelum menganggapnya instalasi baru
+        # right after sign-in even AppData may not be ready; wait before treating this as a fresh install
         for _ in range(retries):
             if CONFIG_PATH.exists() or BACKUP_PATH.exists() or (LEGACY_CONFIG_DIR / "config.json").exists():
                 break
@@ -180,50 +180,50 @@ def load_config(retries=12, delay=0.5, startup=False):
     if not CONFIG_PATH.exists() and not BACKUP_PATH.exists():
         cfg = default_config()
         save_config(cfg)
-        log("load_config: belum ada config, membuat default")
+        log("load_config: no config yet, creating defaults")
         return cfg, "new"
     for attempt in range(retries):
         try:
             cfg = _read_config(CONFIG_PATH)
-            log(f"load_config: ok (percobaan {attempt + 1}), {slot_count(cfg)} slot")
+            log(f"load_config: ok (attempt {attempt + 1}), {slot_count(cfg)} slots")
             return cfg, "ok"
         except (OSError, ValueError) as e:
-            log(f"load_config: percobaan {attempt + 1} gagal: {e!r}")
+            log(f"load_config: attempt {attempt + 1} failed: {e!r}")
             time.sleep(delay)
     try:
         cfg = _read_config(BACKUP_PATH)
-        log(f"load_config: memakai cadangan, {slot_count(cfg)} slot")
+        log(f"load_config: using the backup, {slot_count(cfg)} slots")
         return cfg, "ok"
     except (OSError, ValueError) as e:
-        log(f"load_config: cadangan juga gagal: {e!r}; sementara memakai default")
+        log(f"load_config: backup failed too: {e!r}; using defaults for now")
         return default_config(), "fallback"
 
 
 def save_config(cfg):
-    log(f"save_config: {slot_count(cfg)} slot")
+    log(f"save_config: {slot_count(cfg)} slots")
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        _read_config(CONFIG_PATH)  # cadangkan hanya config lama yang memang valid
+        _read_config(CONFIG_PATH)  # only back up the old config if it is valid
         shutil.copy2(CONFIG_PATH, BACKUP_PATH)
     except (OSError, ValueError):
         pass
     tmp = CONFIG_PATH.with_suffix(".tmp")
     tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, CONFIG_PATH)  # tidak pernah meninggalkan file setengah tertulis
+    os.replace(tmp, CONFIG_PATH)  # never leaves a half-written file behind
 
 
-# Autostart lewat shortcut di folder Startup. Entri registry Run tidak dipakai lagi: Windows 11 versi baru
-# hanya menjalankan entri Run yang sudah disetujui di daftar Startup apps, jadi entri baru dilewati saat login.
+# Autostart uses a shortcut in the Startup folder. The registry Run key is no longer used: recent Windows 11
+# builds only run Run entries already approved in the Startup apps list, so new entries are skipped at sign-in.
 STARTUP_DIR = Path(os.environ.get("APPDATA", Path.home())) / r"Microsoft\Windows\Start Menu\Programs\Startup"
 STARTUP_LNK = STARTUP_DIR / "Orbit.lnk"
 LEGACY_LNK = STARTUP_DIR / "Folder Wheel.lnk"
 
 
-STARTUP_ARG = "--startup"  # dijalankan otomatis saat login: diam di tray, tidak membuka jendela apa pun
+STARTUP_ARG = "--startup"  # launched at sign-in: stay in the tray, never open a window
 
 
 def autostart_target():
-    """Return (program, argumen) untuk shortcut autostart."""
+    """Return (program, arguments) for the autostart shortcut."""
     if FROZEN:
         return sys.executable, STARTUP_ARG
     pyw = Path(sys.executable).with_name("pythonw.exe")
@@ -263,7 +263,7 @@ def set_autostart(on):
 
 
 def migrate_autostart():
-    """Versi lama memasang autostart di registry Run atau shortcut bernama lama; pindahkan ke Orbit.lnk."""
+    """Older versions used the registry Run key or an old-name shortcut; move autostart to Orbit.lnk."""
     moved = _remove_run_entry()
     if LEGACY_LNK.exists():
         LEGACY_LNK.unlink(missing_ok=True)
@@ -344,13 +344,13 @@ def key_down(vk):
 
 
 class HotkeyHook(QObject):
-    """Hook keyboard + mouse global (WH_*_LL) di thread sendiri.
+    """Global keyboard + mouse hooks (WH_*_LL) on their own thread.
 
-    Hotkey ditelan (tidak diteruskan ke aplikasi lain). Selama wheel terbuka, klik kiri/kanan,
-    scroll dan Esc juga ditelan dan dikirim ke wheel. Hotkey pengaturan cukup ditekan sekali.
+    Hotkeys are swallowed (not passed on to other apps). While a wheel is open, left/right clicks,
+    scrolling and Esc are swallowed too and sent to the wheel. The Setting hotkey is a single press.
     """
 
-    pressed = Signal(int)  # index wheel yang hotkey-nya ditekan
+    pressed = Signal(int)  # index of the wheel whose hotkey was pressed
     released = Signal()
     cancel = Signal()
     clicked = Signal()
@@ -363,9 +363,9 @@ class HotkeyHook(QObject):
         self.settings_vk = 0
         self.settings_mods = set()
         self._settings_held = False
-        self.active = None        # (index wheel, vk) selama hotkey wheel ditahan
-        self.wheel_open = False   # diset oleh GUI
-        self.paused = False       # dipakai saat merekam hotkey baru
+        self.active = None        # (wheel index, vk) while a wheel hotkey is held
+        self.wheel_open = False   # set by the GUI
+        self.paused = False       # used while recording a new hotkey
         self._swallow_up = set()
         self._kb_proc = HOOKPROC(self._kb)
         self._ms_proc = HOOKPROC(self._ms)
@@ -397,19 +397,19 @@ class HotkeyHook(QObject):
 
     @staticmethod
     def _tap_mask_key():
-        # tombol dummy supaya melepas Alt/Win tidak membuka menu bar / Start menu
+        # dummy key so releasing Alt/Win does not open a menu bar / the Start menu
         user32.keybd_event(0xE8, 0, 0, 0)
         user32.keybd_event(0xE8, 0, 2, 0)
 
     def _wheel_key(self, vk, down):
-        """Hotkey wheel (ditahan). Return True kalau event harus ditelan."""
+        """Wheel hotkey (held). Return True if the event should be swallowed."""
         if self.active is not None:
             if vk != self.active[1]:
                 return False
             if not down:
                 self.active = None
                 self.released.emit()
-            return True  # termasuk auto-repeat
+            return True  # including auto-repeat
         if not down:
             return False
         for i, (kvk, mods) in enumerate(self.wheel_keys):
@@ -422,7 +422,7 @@ class HotkeyHook(QObject):
         return False
 
     def _settings_key(self, vk, down):
-        """Hotkey pengaturan (sekali tekan). Return True kalau event harus ditelan."""
+        """Setting hotkey (single press). Return True if the event should be swallowed."""
         if vk != self.settings_vk or self.active is not None:
             return False
         if not down:
@@ -433,7 +433,7 @@ class HotkeyHook(QObject):
         if not self._mods_match(self.settings_mods):
             return False
         self._settings_held = True
-        # juga membuat proses ini jadi pengirim input terakhir, jadi jendela Pengaturan boleh tampil di depan
+        # also makes this process the last input sender, so the Setting window may come to the front
         self._tap_mask_key()
         self.settings_requested.emit()
         return True
@@ -441,8 +441,8 @@ class HotkeyHook(QObject):
     def _kb(self, code, wparam, lparam):
         if code == 0 and not self.paused:
             k = ctypes.cast(lparam, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
-            # input injeksi tetap diproses (software mouse/macro sering mengirim tombol lewat SendInput),
-            # kecuali tombol dummy 0xE8 kiriman kita sendiri
+            # injected input is still handled (mouse/macro software often sends keys via SendInput),
+            # except our own 0xE8 dummy key
             if k.vkCode != 0xE8:
                 down = wparam in (WM_KEYDOWN, WM_SYSKEYDOWN)
                 if self.wheel_open and k.vkCode == VK_ESCAPE:
@@ -496,7 +496,7 @@ def path_icon(path):
 
 
 def ring_slice(r_in, r_out, a0, a1):
-    """Irisan cincin dari sudut a0 ke a1 (derajat, searah jarum jam dari arah jam 3)."""
+    """Ring slice from angle a0 to a1 (degrees, clockwise from 3 o'clock)."""
     p = QPainterPath()
     outer = QRectF(-r_out, -r_out, 2 * r_out, 2 * r_out)
     inner = QRectF(-r_in, -r_in, 2 * r_in, 2 * r_in)
@@ -508,8 +508,8 @@ def ring_slice(r_in, r_out, a0, a1):
 
 
 class DimOverlay(QWidget):
-    """Lapisan gelap selayar penuh. Warnanya rata, jadi cukup diatur lewat opacity jendela
-    (murah untuk Windows), bukan digambar ulang per piksel tiap frame."""
+    """Full-screen dimming layer. It is a flat color, so it is faded via window opacity
+    (cheap for Windows) instead of being repainted per pixel every frame."""
 
     def __init__(self):
         super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -523,8 +523,8 @@ WHEEL_SIZE = 2 * (R_OUT + 24)
 
 
 class WheelOverlay(QWidget):
-    """Jendela wheel hanya seukuran wheel; menggambar ulang jendela transparan selayar penuh
-    terlalu berat (puluhan ms per frame di layar resolusi tinggi) sehingga animasinya patah-patah."""
+    """The wheel window is only as big as the wheel; repainting a full-screen translucent window
+    is too slow (tens of ms per frame on high-res screens) and makes the animation stutter."""
 
     def __init__(self):
         super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
@@ -555,11 +555,11 @@ class WheelOverlay(QWidget):
         self.update()
 
     def _animate(self, to, full_ms, easing):
-        """Tween _t dari nilai sekarang, jadi buka/tutup yang beruntun tidak meloncat."""
+        """Tween _t from its current value, so quick open/close sequences do not jump."""
         start = self._t
         self._anim.stop()
-        # setStartValue/setEndValue pada animasi yang berhenti ikut memancarkan valueChanged,
-        # yang akan menimpa _t sebelum durasinya dihitung
+        # setStartValue/setEndValue on a stopped animation also emit valueChanged,
+        # which would overwrite _t before the duration is computed
         self._anim.blockSignals(True)
         self._anim.setStartValue(start)
         self._anim.setEndValue(to)
@@ -570,8 +570,8 @@ class WheelOverlay(QWidget):
 
     def _on_anim_done(self):
         if not self.is_open:
-            # kosongkan isi jendela sebelum disembunyikan; kalau tidak, Windows sempat menampilkan
-            # frame lama (wheel penuh) sepersekian detik saat jendela muncul lagi
+            # clear the window before hiding it; otherwise Windows briefly shows the stale
+            # frame (the full wheel) for a split second when the window appears again
             self._t = 0.0
             self.repaint()
             self.hide()
@@ -628,7 +628,7 @@ class WheelOverlay(QWidget):
 
     def paintEvent(self, e):
         if self._t <= 0.001:
-            return  # frame kosong (latar transparan)
+            return  # empty frame (transparent background)
         self._paint()
 
     def flip(self, step):
@@ -664,12 +664,12 @@ class WheelOverlay(QWidget):
 
 
 def _readable_on(c):
-    """Warna teks yang terbaca di atas warna c."""
+    """A text color that is readable on top of color c."""
     return QColor(20, 20, 24) if 0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue() > 150 else QColor(240, 240, 244)
 
 
 def paint_wheel(p, pages, page, hover, title, theme):
-    """Gambar wheel berpusat di (0, 0); dipakai overlay dan preview di Setting."""
+    """Paint the wheel centered on (0, 0); used by the overlay and the Setting preview."""
     alpha = int(255 * max(0.3, min(1.0, theme.get("opacity", 0.85))))
     slice_col = QColor(theme["slice"])
     slice_col.setAlpha(alpha)
@@ -682,7 +682,7 @@ def paint_wheel(p, pages, page, hover, title, theme):
     slots = pages[page]["slots"] if pages else []
     n = len(slots)
     p.setPen(Qt.NoPen)
-    # bayangan lembut di belakang wheel
+    # soft shadow behind the wheel
     p.setBrush(QColor(0, 0, 0, 70))
     p.drawEllipse(QPointF(0, 4), R_OUT + 10, R_OUT + 10)
 
@@ -716,7 +716,7 @@ def paint_wheel(p, pages, page, hover, title, theme):
         p.setBrush(slice_col)
         p.drawPath(ring_slice(R_IN + 4, R_OUT, -269.9, 89.9))
 
-    # lingkaran tengah
+    # center circle
     outline = QColor(center_text)
     outline.setAlpha(40)
     p.setPen(QPen(outline, 1))
@@ -733,7 +733,7 @@ def paint_wheel(p, pages, page, hover, title, theme):
         if not n:
             sub = "Empty page. Add slots in Setting."
         elif len(pages) > 1 and title:
-            sub = page_name  # nama halaman tetap kelihatan saat scroll ganti halaman
+            sub = page_name  # keep the page name visible while scrolling between pages
         else:
             sub = "Cancel"
         title_col = QColor(center_text)
@@ -750,7 +750,7 @@ def paint_wheel(p, pages, page, hover, title, theme):
     p.setPen(sub_col)
     p.drawText(QRectF(box.left(), box.top() + 44, box.width(), 40), Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap,
                QFontMetrics(f2).elidedText(sub, Qt.ElideMiddle, int(box.width() * 2 - 20)))
-    # titik penanda halaman
+    # page indicator dots
     if len(pages) > 1:
         k = len(pages)
         x0 = -(k - 1) * 7
@@ -763,7 +763,7 @@ def paint_wheel(p, pages, page, hover, title, theme):
 
 
 class WheelPreview(QWidget):
-    """Preview wheel di Setting; slot di bawah kursor ikut tersorot seperti wheel asli."""
+    """Wheel preview in Setting; the slot under the cursor lights up like on the real wheel."""
 
     def __init__(self):
         super().__init__()
@@ -778,7 +778,7 @@ class WheelPreview(QWidget):
         self.update()
 
     def _scale(self):
-        # Large harus tetap muat: skala dasar dihitung untuk ukuran terbesar
+        # Large must still fit: the base scale is computed for the biggest size
         return min(self.width(), self.height()) / (WHEEL_SIZE * max(SIZES.values())) * self.theme.get("size", 1.0)
 
     def mouseMoveEvent(self, e):
@@ -796,7 +796,7 @@ class WheelPreview(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         p.setRenderHint(QPainter.SmoothPixmapTransform)
-        # latar abu-abu ala desktop supaya transparansi wheel kelihatan
+        # desktop-like backdrop so the wheel transparency is visible
         g = QLinearGradient(QPointF(0, 0), QPointF(self.width(), self.height()))
         g.setColorAt(0, QColor(92, 110, 140))
         g.setColorAt(1, QColor(150, 120, 110))
@@ -813,7 +813,7 @@ class WheelPreview(QWidget):
 # ---------------------------------------------------------------- settings
 
 class HotkeyButton(QPushButton):
-    changed = Signal(dict)  # hotkey lama, dipancarkan setelah kombinasi baru direkam
+    changed = Signal(dict)  # the old hotkey, emitted after a new combination is recorded
 
     def __init__(self, hook, hk):
         super().__init__()
@@ -891,7 +891,7 @@ class HotkeyButton(QPushButton):
 
 
 class ColorButton(QPushButton):
-    changed = Signal(str)  # warna baru, "#rrggbb"
+    changed = Signal(str)  # the new color, "#rrggbb"
 
     def __init__(self):
         super().__init__()
@@ -962,7 +962,7 @@ class SettingsDialog(QDialog):
 
         self._fill_wheel_combo(0)
 
-    # --- hotkey: setiap wheel dan hotkey Setting harus berbeda
+    # --- hotkeys: every wheel and the Setting hotkey must differ
     def _hotkey_owners(self):
         owners = [(w["name"], w["hotkey"]) for w in self.cfg["wheels"]]
         owners.append(("Setting", self.settings_hotkey_btn.hk))
@@ -1085,7 +1085,7 @@ class SettingsDialog(QDialog):
         lay.addWidget(inner, 1)
         return w
 
-    # --- tampilan wheel yang dipilih
+    # --- appearance of the selected wheel
     def _build_appearance(self):
         w = QWidget()
         form = QFormLayout()
@@ -1233,7 +1233,7 @@ class SettingsDialog(QDialog):
             del self.cfg["wheels"][i]
             self._fill_wheel_combo(max(0, i - 1))
 
-    # --- halaman dan slot (milik wheel yang dipilih)
+    # --- pages and slots (of the selected wheel)
     def _page(self):
         r = self.page_list.currentRow()
         pages = self._wheel()["pages"]
@@ -1282,7 +1282,7 @@ class SettingsDialog(QDialog):
             path = os.path.normpath(path)
             entry = {"name": Path(path).name or path, "path": path}
             if replace_row is not None:
-                pg["slots"][replace_row].update(entry)  # nama ikut berganti sesuai folder/file target
+                pg["slots"][replace_row].update(entry)  # the name follows the new folder/file
                 last = replace_row
                 break
             if len(pg["slots"]) >= MAX_SLOTS:
@@ -1414,7 +1414,7 @@ class OrbitApp(QObject):
         super().__init__()
         self.cfg = cfg
         self.fallback = status == "fallback"
-        self.page_of = {}         # halaman terakhir per wheel
+        self.page_of = {}         # last page per wheel
         self.active_wheel = 0
         self.icon = make_icon()
         self.settings = None
@@ -1443,7 +1443,7 @@ class OrbitApp(QObject):
             QTimer.singleShot(300, self.open_settings)
         elif not self.fallback:
             self.tray.showMessage("Orbit is running", self._hotkey_summary(), self.icon, 3000)
-        # config yang ada belum terbaca: coba lagi terus di belakang layar sampai berhasil
+        # the existing config could not be read yet: keep retrying in the background
         self._reload_timer = QTimer(self, interval=3000, timeout=self._retry_load)
         if self.fallback:
             self._reload_timer.start()
@@ -1455,9 +1455,9 @@ class OrbitApp(QObject):
         try:
             cfg = _read_config(CONFIG_PATH)
         except (OSError, ValueError) as e:
-            log(f"muat ulang config gagal: {e!r}")
+            log(f"config reload failed: {e!r}")
             return
-        log(f"muat ulang config berhasil, {slot_count(cfg)} slot")
+        log(f"config reloaded, {slot_count(cfg)} slots")
         self._reload_timer.stop()
         self.fallback = False
         self.apply_config(cfg)
@@ -1472,14 +1472,14 @@ class OrbitApp(QObject):
         self._warm_up()
 
     def _warm_up(self):
-        """Siapkan ikon dan jendela overlay lebih awal supaya wheel pertama kali tidak tersendat."""
+        """Prepare icons and the overlay window early so the first wheel does not stutter."""
         for w in self.cfg["wheels"]:
             for pg in w["pages"]:
                 for s in pg["slots"]:
                     path_icon(s["path"])
         ov = self.overlay
         if not ov.is_open and not ov.isVisible():
-            # gambar wheel sekali di belakang layar supaya font dan ikon sudah siap
+            # paint the wheel once off-screen so fonts and icons are ready
             dpr = QGuiApplication.primaryScreen().devicePixelRatio()
             pix = QPixmap(ov.size() * dpr)
             pix.setDevicePixelRatio(dpr)
@@ -1491,8 +1491,8 @@ class OrbitApp(QObject):
                 ov.render(pix)
             ov._t, ov.hover = 0.0, None
             ov.dimmer.setGeometry(QGuiApplication.primaryScreen().geometry())
-            ov.dimmer.show()  # opacity 0 -> tidak terlihat
-            ov.show()  # _t = 0 -> frame kosong
+            ov.dimmer.show()  # opacity 0 -> invisible
+            ov.show()  # _t = 0 -> empty frame
             QTimer.singleShot(50, lambda: ov.is_open or (ov.hide(), ov.dimmer.hide()))
 
     def show_wheel(self, index):
@@ -1524,7 +1524,7 @@ class OrbitApp(QObject):
         if not os.path.exists(path):
             self.tray.showMessage("Orbit", f"Not found:\n{path}", QSystemTrayIcon.Warning, 4000)
             return
-        user32.AllowSetForegroundWindow(0xFFFFFFFF)  # ASFW_ANY: biar Explorer bisa tampil di depan
+        user32.AllowSetForegroundWindow(0xFFFFFFFF)  # ASFW_ANY: let Explorer come to the front
         try:
             os.startfile(path)
         except OSError as e:
@@ -1537,7 +1537,7 @@ class OrbitApp(QObject):
         if self.fallback:
             self._retry_load()
         if self.fallback:
-            # jangan sampai pengaturan bawaan tersimpan menimpa config milik pengguna
+            # never let default settings be saved over the user's config
             QMessageBox.warning(None, "Setting",
                                 f"Your saved settings can't be read yet:\n{CONFIG_PATH}\n\n"
                                 "Orbit keeps retrying in the background. Try opening Setting again in a moment.")
@@ -1553,7 +1553,7 @@ class OrbitApp(QObject):
             try:
                 save_config(cfg)
             except OSError as e:
-                log(f"save_config gagal: {e!r}")
+                log(f"save_config failed: {e!r}")
                 QMessageBox.warning(None, "Setting", f"Could not save the settings:\n{e}")
             self.apply_config(cfg)
         self.settings = None
@@ -1573,7 +1573,7 @@ def main():
     app.setApplicationVersion(APP_VERSION)
     app.setWindowIcon(make_icon())
 
-    # satu instance saja: kalau sudah jalan, minta instance lama membuka Pengaturan
+    # single instance: if Orbit is already running, ask that instance to open Setting
     server_name = f"{APP_NAME}-{os.environ.get('USERNAME', 'user')}"
     sock = QLocalSocket()
     sock.connectToServer(server_name)
@@ -1589,11 +1589,11 @@ def main():
     startup = STARTUP_ARG in sys.argv
     migrate_autostart()
     if not startup and get_autostart():
-        # perbarui shortcut lama (tanpa --startup) dan ikuti kalau file ini dipindah
+        # refresh an old shortcut (without --startup) and follow this file if it moved
         try:
             set_autostart(True)
         except (OSError, subprocess.CalledProcessError) as e:
-            log(f"memperbarui shortcut autostart gagal: {e!r}")
+            log(f"updating the autostart shortcut failed: {e!r}")
     cfg, status = load_config(startup=startup)
     fw = OrbitApp(status, cfg, startup)
 
