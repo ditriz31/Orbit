@@ -3,11 +3,11 @@
 A radial menu for Windows that opens your folders and files. Hold a hotkey, flick the mouse toward a
 folder, let go, and it opens in Explorer.
 
-![Orbit](docs/wheel.png)
+![Orbit](docs/preview.png)
 
 ## Demo
 
-![Hold Alt+Q, move toward a folder, release to open it](docs/demo.gif)
+![Hold Alt+Q, move toward a folder, release to open it](docs/demo-usage.gif)
 
 1. **Hold** the hotkey (default <kbd>Alt</kbd>+<kbd>Q</kbd>). The wheel appears at your mouse cursor.
 2. **Move** the mouse toward a slot. The slot lights up and the center shows its full path.
@@ -25,7 +25,7 @@ folder, let go, and it opens in Explorer.
 - Hotkeys can be any key combination or a side mouse button.
 - Starts with Windows and stays out of the way in the system tray.
 
-![Built-in themes](docs/themes.png)
+![Built-in themes](docs/theme-presets.png)
 
 ## Install
 

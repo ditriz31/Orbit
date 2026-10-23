@@ -253,10 +253,10 @@ for i in range(5, -1, -1):
 
 # dithering supaya gradasi latar tidak terlihat patah-patah di palet GIF yang hanya 256 warna
 pal = [f.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG) for f in frames]
-pal[0].save(OUT / "demo.gif", save_all=True, append_images=pal[1:], duration=durations, loop=0, optimize=True)
+pal[0].save(OUT / "demo-usage.gif", save_all=True, append_images=pal[1:], duration=durations, loop=0, optimize=True)
 
 # --- gambar utama
-frame(900, 600, t=1, hover=1, cur=None, dim=True).save(OUT / "wheel.png")
+frame(900, 600, t=1, hover=1, cur=None, dim=True).save(OUT / "preview.png")
 
 # --- deretan tema
 names = ["Dark", "Midnight Blue", "Neon Purple", "Crimson", "Emerald", "Gold",
@@ -279,7 +279,7 @@ for i, name in enumerate(names):
     p.setFont(QFont("Segoe UI", 10, QFont.Bold))
     p.drawText(QRectF(x, y + 4, cell, 20), Qt.AlignHCenter, name)
 p.end()
-to_pil(sheet).save(OUT / "themes.png")
+to_pil(sheet).save(OUT / "theme-presets.png")
 
 # --- jendela Setting
 cfg = fw["default_config"]()
