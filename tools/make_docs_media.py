@@ -51,13 +51,6 @@ def backdrop(p, w, h, dim=0.0):
     g.setColorAt(0.55, QColor(120, 96, 140))
     g.setColorAt(1, QColor(196, 128, 104))
     p.fillRect(QRectF(0, 0, w, h), QBrush(g))
-    # jendela tiruan supaya terlihat seperti desktop
-    for x, y, ww, hh in ((40, 50, 300, 190), (380, 210, 290, 170)):
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(255, 255, 255, 38))
-        p.drawRoundedRect(QRectF(x, y, ww, hh), 10, 10)
-        p.setBrush(QColor(255, 255, 255, 55))
-        p.drawRoundedRect(QRectF(x, y, ww, 26), 10, 10)
     if dim:
         p.fillRect(QRectF(0, 0, w, h), QColor(0, 0, 0, int(80 * dim)))
 
@@ -258,7 +251,8 @@ add(frame(W, H, t=1, page=1, cur=(cx, cy), caption="Scroll to switch pages"), 13
 for i in range(5, -1, -1):
     add(frame(W, H, t=i / 5, page=1, cur=(cx, cy), caption="Scroll to switch pages"), 30)
 
-pal = [f.quantize(colors=200, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE) for f in frames]
+# dithering supaya gradasi latar tidak terlihat patah-patah di palet GIF yang hanya 256 warna
+pal = [f.quantize(colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.FLOYDSTEINBERG) for f in frames]
 pal[0].save(OUT / "demo.gif", save_all=True, append_images=pal[1:], duration=durations, loop=0, optimize=True)
 
 # --- gambar utama
