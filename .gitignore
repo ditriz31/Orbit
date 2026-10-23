@@ -1,0 +1,10 @@
+# hasil build
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
+
+# config dan log pribadi (aslinya di %APPDATA%\Orbit, jangan sampai ikut)
+config*.json
+*.log
