@@ -85,7 +85,100 @@ def badge(p, w, h, text, sub=""):
     p.drawText(r, Qt.AlignCenter, text)
 
 
-def frame(w, h, t=0.0, hover=None, page=0, cur=None, caption="", theme=None, dim=True):
+VIDEO_FILES = [("Holiday.mp4", (230, 120, 70)), ("Tutorial.mp4", (70, 140, 220)), ("Gameplay.mp4", (120, 200, 110)),
+               ("Vlog_03.mp4", (210, 90, 150)), ("Intro.mp4", (240, 190, 60)), ("Timelapse.mp4", (90, 200, 210))]
+
+
+def explorer(p, w, h, slot, t):
+    """Jendela File Explorer tiruan (Windows 11, mode gelap) yang membuka folder slot."""
+    if t <= 0:
+        return
+    ww, wh = 540, 330
+    p.save()
+    p.setOpacity(t)
+    p.translate(w / 2, h / 2 - 20)
+    s = 0.94 + 0.06 * t  # animasi buka jendela Windows: sedikit membesar sambil muncul
+    p.scale(s, s)
+    p.translate(-ww / 2, -wh / 2)
+    # bayangan + badan jendela
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(0, 0, 0, 90))
+    p.drawRoundedRect(QRectF(4, 8, ww, wh), 10, 10)
+    p.setBrush(QColor(32, 32, 32))
+    p.setPen(QPen(QColor(70, 70, 70), 1))
+    p.drawRoundedRect(QRectF(0, 0, ww, wh), 8, 8)
+    p.setPen(Qt.NoPen)
+    # title bar: ikon folder, nama, tombol jendela
+    icon = fw["path_icon"](slot["path"])
+    p.drawPixmap(QRectF(12, 9, 16, 16), icon, QRectF(icon.rect()))
+    p.setPen(QColor(235, 235, 235))
+    p.setFont(QFont("Segoe UI", 9))
+    p.drawText(QRectF(36, 6, 300, 22), Qt.AlignVCenter, slot["name"])
+    p.setPen(QPen(QColor(200, 200, 200), 1.2))
+    for i, x in enumerate((ww - 110, ww - 70, ww - 30)):
+        if i == 0:
+            p.drawLine(QPointF(x, 17), QPointF(x + 10, 17))
+        elif i == 1:
+            p.drawRect(QRectF(x, 12, 10, 10))
+        else:
+            p.drawLine(QPointF(x, 12), QPointF(x + 10, 22))
+            p.drawLine(QPointF(x + 10, 12), QPointF(x, 22))
+    # address bar
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(44, 44, 44))
+    p.drawRect(QRectF(0, 34, ww, 34))
+    p.setBrush(QColor(56, 56, 56))
+    p.drawRoundedRect(QRectF(90, 40, ww - 230, 22), 4, 4)
+    p.drawRoundedRect(QRectF(ww - 130, 40, 118, 22), 4, 4)
+    p.setPen(QColor(220, 220, 220))
+    p.setFont(QFont("Segoe UI", 8))
+    crumbs = "  >  ".join(["This PC", "Local Disk (C:)", "Users", "you", slot["name"]])
+    p.drawText(QRectF(100, 40, ww - 250, 22), Qt.AlignVCenter, crumbs)
+    p.setPen(QColor(150, 150, 150))
+    p.drawText(QRectF(ww - 120, 40, 110, 22), Qt.AlignVCenter, f"Search {slot['name']}")
+    for i, ch in enumerate(("<", ">", "^")):
+        p.setPen(QColor(200, 200, 200) if i != 1 else QColor(110, 110, 110))
+        p.drawText(QRectF(10 + i * 24, 40, 20, 22), Qt.AlignCenter, ch)
+    # navigation pane
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(28, 28, 28))
+    p.drawRect(QRectF(0, 68, 130, wh - 76))
+    p.setFont(QFont("Segoe UI", 8))
+    for i, name in enumerate(("Home", "Desktop", "Downloads", "Documents", "Pictures", "Music", "Videos")):
+        y = 80 + i * 26
+        if name == slot["name"]:
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(60, 60, 60))
+            p.drawRoundedRect(QRectF(6, y - 3, 118, 22), 4, 4)
+            p.setBrush(QColor(76, 194, 255))
+            p.drawRoundedRect(QRectF(6, y + 2, 3, 12), 1.5, 1.5)
+        p.setPen(QColor(230, 230, 230))
+        p.drawText(QRectF(18, y - 3, 110, 22), Qt.AlignVCenter, name)
+    # isi folder: thumbnail video
+    for i, (name, col) in enumerate(VIDEO_FILES):
+        x, y = 148 + (i % 3) * 128, 84 + (i // 3) * 118
+        # warna polos: gradasi jadi bergaris setelah dikompres ke palet GIF
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(*col))
+        p.drawRoundedRect(QRectF(x, y, 112, 70), 4, 4)
+        p.setBrush(QColor(0, 0, 0, 60))
+        p.drawRect(QRectF(x, y + 52, 112, 18))
+        tri = QPainterPath()
+        tri.moveTo(x + 50, y + 25)
+        tri.lineTo(x + 50, y + 45)
+        tri.lineTo(x + 66, y + 35)
+        tri.closeSubpath()
+        p.setBrush(QColor(255, 255, 255, 220))
+        p.drawPath(tri)
+        p.setPen(QColor(225, 225, 225))
+        p.drawText(QRectF(x - 4, y + 74, 120, 18), Qt.AlignHCenter, name)
+    # status bar
+    p.setPen(QColor(160, 160, 160))
+    p.drawText(QRectF(10, wh - 22, 200, 18), Qt.AlignVCenter, f"{len(VIDEO_FILES)} items")
+    p.restore()
+
+
+def frame(w, h, t=0.0, hover=None, page=0, cur=None, caption="", theme=None, dim=True, win=None):
     img = QImage(w, h, QImage.Format_ARGB32)
     p = QPainter(img)
     p.setRenderHint(QPainter.Antialiasing)
@@ -99,6 +192,8 @@ def frame(w, h, t=0.0, hover=None, page=0, cur=None, caption="", theme=None, dim
         p.scale(s, s)
         fw["paint_wheel"](p, PAGES, page, hover, TITLE, theme or fw["theme_from_preset"]("Midnight Blue"))
         p.restore()
+    if win:
+        explorer(p, w, h, *win)
     if cur:
         cursor(p, *cur)
     if caption:
@@ -141,7 +236,13 @@ hv = hover_at(x - cx, y - cy, len(slots))
 add(frame(W, H, t=1, hover=hv, cur=(x, y), caption=f"Release Alt + Q to open {slots[hv]['name']}"), 1200)
 for i in range(5, -1, -1):
     add(frame(W, H, t=i / 5, hover=hv, cur=(x, y), caption=f"Release Alt + Q to open {slots[hv]['name']}"), 30)
-add(frame(W, H, cur=(x, y), caption=f"{slots[hv]['name']} opens in Explorer"), 1000)
+opened = f"{slots[hv]['name']} opens in Explorer"
+for i in range(1, 7):
+    add(frame(W, H, cur=(x, y), caption=opened, win=(slots[hv], i / 6)), 30)
+add(frame(W, H, cur=(x, y), caption=opened, win=(slots[hv], 1)), 1800)
+for i in range(4, -1, -1):
+    add(frame(W, H, cur=(x, y), caption=opened, win=(slots[hv], i / 5)), 30)
+add(frame(W, H, cur=(cx, cy)), 400)
 # batal: lepas di tengah
 for i in range(1, 7):
     add(frame(W, H, t=i / 6, cur=(cx, cy), caption="Release in the center to cancel"), 30)
