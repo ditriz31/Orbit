@@ -25,7 +25,7 @@ folder, let go, and it opens in Explorer.
 - Hotkeys can be any key combination or a side mouse button.
 - Starts with Windows and stays out of the way in the system tray.
 
-![Built-in themes](docs/theme-presets.png)
+![All 23 built-in themes](docs/theme-gallery.png)
 
 ## Install
 

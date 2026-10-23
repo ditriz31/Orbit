@@ -259,16 +259,17 @@ pal[0].save(OUT / "demo-usage.gif", save_all=True, append_images=pal[1:], durati
 frame(900, 600, t=1, hover=1, cur=None, dim=True).save(OUT / "preview.png")
 
 # --- theme presets
-names = ["Dark", "Midnight Blue", "Neon Purple", "Crimson", "Emerald", "Gold",
-         "Sakura", "Cyberpunk", "Dracula", "Nord", "Mint", "Light"]
+names = list(fw["THEMES"])  # every preset, straight from the app, so the picture can't fall out of sync
+cols = 6
+rows = -(-len(names) // cols)
 cell = 250
-sheet = QImage(cell * 6, cell * 2 + 0, QImage.Format_ARGB32)
+sheet = QImage(cell * cols, cell * rows, QImage.Format_ARGB32)
 p = QPainter(sheet)
 p.setRenderHint(QPainter.Antialiasing)
 p.setRenderHint(QPainter.SmoothPixmapTransform)
 backdrop(p, sheet.width(), sheet.height())
 for i, name in enumerate(names):
-    x, y = (i % 6) * cell, (i // 6) * cell
+    x, y = (i % cols) * cell, (i // cols) * cell
     p.save()
     p.translate(x + cell / 2, y + cell / 2 + 10)
     s = (cell - 40) / (2 * (fw["R_OUT"] + 12))
@@ -279,7 +280,7 @@ for i, name in enumerate(names):
     p.setFont(QFont("Segoe UI", 10, QFont.Bold))
     p.drawText(QRectF(x, y + 4, cell, 20), Qt.AlignHCenter, name)
 p.end()
-to_pil(sheet).save(OUT / "theme-presets.png")
+to_pil(sheet).save(OUT / "theme-gallery.png")
 
 # --- Setting window
 cfg = fw["default_config"]()
