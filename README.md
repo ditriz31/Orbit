@@ -23,6 +23,7 @@ folder, let go, and it opens in Explorer.
 - Add slots by browsing, or by dragging folders and files from Explorer onto the slot list.
 - **23 built-in themes** plus custom colors, opacity and size, with a live preview.
 - Hotkeys can be any key combination or a side mouse button.
+- Folders can open in a new Explorer window or as a new tab in the Explorer window you already have open (Windows 11).
 - Starts with Windows and stays out of the way in the system tray.
 
 ![All 23 built-in themes](docs/theme-gallery.png)
@@ -52,7 +53,8 @@ Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd> (or double-click the tray ico
 - **Appearance:** choose a theme or your own colors, opacity and size. Hover over the preview to see
   the highlight.
 - **General tab:** the Setting shortcut, where the wheel appears (at the cursor or the screen center),
-  screen dimming and *Start automatically when I sign in to Windows*.
+  whether folders open in a new window or a new tab, screen dimming and
+  *Start automatically when I sign in to Windows*.
 
 ![Setting: appearance](docs/settings-appearance.png)
 

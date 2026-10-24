@@ -19,6 +19,12 @@ import time
 import winreg
 from pathlib import Path
 
+try:  # pywin32: talks to open File Explorer windows so folders can open as tabs
+    import win32com.client
+    import win32gui
+except ImportError:  # running from source without pywin32: folders always open in a new window
+    win32com = win32gui = None
+
 from PySide6.QtCore import QEasingCurve, QObject, QPointF, QRectF, Qt, QTimer, QVariantAnimation, Signal, QFileInfo, QSize
 from PySide6.QtGui import (
     QBrush, QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QIcon, QLinearGradient, QPainter, QPainterPath, QPen,
@@ -62,6 +68,7 @@ def default_config():
         "settings_hotkey": {"mods": ["alt", "shift"], "vk": 0x51},  # Alt+Shift+Q
         "position": "cursor",
         "dim": True,
+        "folder_open": "window",  # "window": new Explorer window, "tab": new tab in an open Explorer window
         "wheels": [new_wheel("Wheel 1", {"mods": ["alt"], "vk": 0x51},  # Alt+Q
                              os.environ.get("USERNAME", "Orbit"),
                              [{"name": n, "path": str(p)} for n, p in slots])],
@@ -1366,6 +1373,15 @@ class SettingsDialog(QDialog):
         self.position.addItem("At the center of the screen", "center")
         self.position.setCurrentIndex(0 if self.cfg.get("position") != "center" else 1)
         form.addRow("Wheel position:", self.position)
+        self.folder_open = QComboBox()
+        self.folder_open.addItem("A new Explorer window", "window")
+        self.folder_open.addItem("A new tab in the open Explorer window", "tab")
+        self.folder_open.setCurrentIndex(1 if self.cfg.get("folder_open", "window") == "tab" else 0)
+        form.addRow("Open folders in:", self.folder_open)
+        tab_hint = QLabel("Tabs need Windows 11. With no Explorer window open, or on Windows 10, "
+                          "folders open in a new window.")
+        tab_hint.setWordWrap(True)
+        form.addRow("", tab_hint)
         self.dim = QCheckBox("Dim the screen slightly while a wheel is open")
         self.dim.setChecked(self.cfg.get("dim", True))
         form.addRow("", self.dim)
@@ -1392,6 +1408,7 @@ class SettingsDialog(QDialog):
         cfg["settings_hotkey"] = self.settings_hotkey_btn.hk
         cfg["position"] = self.position.currentData()
         cfg["dim"] = self.dim.isChecked()
+        cfg["folder_open"] = self.folder_open.currentData()
         return cfg
 
 
@@ -1412,6 +1429,34 @@ def make_icon():
     p.drawEllipse(QPointF(0, 0), 6, 6)
     p.end()
     return QIcon(pix)
+
+
+EXPLORER_NEW_TAB = 0xA21B  # WM_COMMAND id behind Explorer's "New tab" (Ctrl+T) on Windows 11
+
+
+def _frontmost_explorer():
+    """Handle of the topmost visible File Explorer window, or None."""
+    found = []
+
+    def check(h, _):
+        if not found and win32gui.IsWindowVisible(h) and win32gui.GetClassName(h) == "CabinetWClass":
+            found.append(h)
+        return True
+
+    win32gui.EnumWindows(check, None)  # enumerates in z-order, topmost first
+    return found[0] if found else None
+
+
+def _explorer_tabs(hwnd):
+    """Shell window objects (one per tab) belonging to Explorer window hwnd, oldest first."""
+    tabs = []
+    for w in win32com.client.Dispatch("Shell.Application").Windows():
+        try:
+            if w.HWND == hwnd:
+                tabs.append(w)
+        except Exception:
+            pass
+    return tabs
 
 
 class OrbitApp(QObject):
@@ -1530,6 +1575,11 @@ class OrbitApp(QObject):
             self.tray.showMessage("Orbit", f"Not found:\n{path}", QSystemTrayIcon.Warning, 4000)
             return
         user32.AllowSetForegroundWindow(0xFFFFFFFF)  # ASFW_ANY: let Explorer come to the front
+        if os.path.isdir(path) and self.cfg.get("folder_open", "window") == "tab" and self._open_in_new_tab(path):
+            return
+        self._shell_open(path)
+
+    def _shell_open(self, path):
         # Start programs in their own folder, like a double-click in Explorer does. Without this they inherit
         # Orbit's working folder, and apps that load files by relative path (OBS: locale/en-US.ini) fail.
         # Shortcuts (.lnk) and folders get no folder, so a shortcut's own "Start in" still applies.
@@ -1539,6 +1589,46 @@ class OrbitApp(QObject):
         result = shell32.ShellExecuteW(None, "open", path, None, workdir, 1)  # SW_SHOWNORMAL
         if result <= 32:  # ShellExecute reports errors as values up to 32
             self.tray.showMessage("Orbit", f"Could not open {path}\n(error {result})", QSystemTrayIcon.Warning, 4000)
+
+    def _open_in_new_tab(self, path):
+        """Open a folder as a new tab of the frontmost File Explorer window (Windows 11).
+
+        Windows has no API for this, so Orbit asks the window to add a tab (the same command as Ctrl+T)
+        and then points the new tab at the folder. Returns False when there is no window with tabs,
+        and the caller opens a new window instead.
+        """
+        if win32gui is None:
+            return False
+        try:
+            hwnd = _frontmost_explorer()
+            tab_host = win32gui.FindWindowEx(hwnd, 0, "ShellTabWindowClass", None) if hwnd else 0
+            if not tab_host:
+                return False
+            before = len(_explorer_tabs(hwnd))
+            if win32gui.IsIconic(hwnd):
+                win32gui.ShowWindow(hwnd, 9)  # SW_RESTORE
+            win32gui.PostMessage(tab_host, 0x0111, EXPLORER_NEW_TAB, 0)  # WM_COMMAND
+        except Exception as e:  # COM/window errors: just use a new window
+            log(f"new tab failed: {e!r}")
+            return False
+        self._finish_new_tab(hwnd, before, path, 0)
+        return True
+
+    def _finish_new_tab(self, hwnd, before, path, tries):
+        # the tab appears asynchronously; poll briefly without blocking the wheel's closing animation
+        try:
+            tabs = _explorer_tabs(hwnd)
+            if len(tabs) > before:
+                tabs[-1].Navigate2(path)  # the newest tab is listed last
+                user32.SetForegroundWindow(hwnd)
+                return
+        except Exception as e:
+            log(f"new tab failed: {e!r}")
+        if tries < 40:
+            QTimer.singleShot(50, lambda: self._finish_new_tab(hwnd, before, path, tries + 1))
+        else:
+            log("new tab did not appear; opening a new window")
+            self._shell_open(path)
 
     def open_settings(self):
         if self.settings is not None:
