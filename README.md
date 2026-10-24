@@ -13,7 +13,8 @@ folder, let go, and it opens in Explorer.
 2. **Move** the mouse toward a slot. The slot lights up and the center shows its full path.
 3. **Release** the hotkey and the folder or file opens.
    Release while the cursor is in the center, press <kbd>Esc</kbd> or right-click, and nothing opens.
-4. **Scroll** while the wheel is open to switch between pages.
+4. **Scroll** while the wheel is open to switch between pages (a wheel needs at least two pages for this).
+   A wheel opens on its first page by default; you can change that in Setting.
 
 ## Features
 
@@ -53,8 +54,8 @@ Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd> (or double-click the tray ico
 - **Appearance:** choose a theme or your own colors, opacity and size. Hover over the preview to see
   the highlight.
 - **General tab:** the Setting shortcut, where the wheel appears (at the cursor or the screen center),
-  whether folders open in a new window or a new tab, screen dimming and
-  *Start automatically when I sign in to Windows*.
+  whether folders open in a new window or a new tab, whether a wheel always opens on its first page
+  or on the page you used last, screen dimming and *Start automatically when I sign in to Windows*.
 
 ![Setting: appearance](docs/settings-appearance.png)
 

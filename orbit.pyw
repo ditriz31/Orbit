@@ -69,6 +69,7 @@ def default_config():
         "position": "cursor",
         "dim": True,
         "folder_open": "window",  # "window": new Explorer window, "tab": new tab in an open Explorer window
+        "open_page": "first",  # "first": every wheel starts on page 1, "last": resume the last page you used
         "wheels": [new_wheel("Wheel 1", {"mods": ["alt"], "vk": 0x51},  # Alt+Q
                              os.environ.get("USERNAME", "Orbit"),
                              [{"name": n, "path": str(p)} for n, p in slots])],
@@ -1378,6 +1379,11 @@ class SettingsDialog(QDialog):
         self.folder_open.addItem("A new tab in the open Explorer window", "tab")
         self.folder_open.setCurrentIndex(1 if self.cfg.get("folder_open", "window") == "tab" else 0)
         form.addRow("Open folders in:", self.folder_open)
+        self.open_page = QComboBox()
+        self.open_page.addItem("Always the first page", "first")
+        self.open_page.addItem("The page I used last", "last")
+        self.open_page.setCurrentIndex(1 if self.cfg.get("open_page", "first") == "last" else 0)
+        form.addRow("Wheel opens on:", self.open_page)
         tab_hint = QLabel("Tabs need Windows 11. With no Explorer window open, or on Windows 10, "
                           "folders open in a new window.")
         tab_hint.setWordWrap(True)
@@ -1409,6 +1415,7 @@ class SettingsDialog(QDialog):
         cfg["position"] = self.position.currentData()
         cfg["dim"] = self.dim.isChecked()
         cfg["folder_open"] = self.folder_open.currentData()
+        cfg["open_page"] = self.open_page.currentData()
         return cfg
 
 
@@ -1551,7 +1558,8 @@ class OrbitApp(QObject):
         w = self.cfg["wheels"][index]
         self.active_wheel = index
         self.hook.wheel_open = True
-        self.overlay.open(w["pages"], self.page_of.get(index, 0), self.cfg.get("position", "cursor"),
+        resume = self.cfg.get("open_page", "first") == "last"
+        self.overlay.open(w["pages"], self.page_of.get(index, 0) if resume else 0, self.cfg.get("position", "cursor"),
                           self.cfg.get("dim", True), w.get("title", ""), w["theme"])
 
     def hide_wheel(self):
