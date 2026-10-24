@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Orbit"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 FROZEN = getattr(sys, "frozen", False)  # running as a PyInstaller exe
 # program folder: where the exe (built version) or this .pyw file lives
 APP_DIR = Path(sys.executable).parent if FROZEN else Path(__file__).resolve().parent
@@ -304,6 +304,9 @@ user32.GetAsyncKeyState.restype = ctypes.c_short
 user32.keybd_event.argtypes = [wt.BYTE, wt.BYTE, wt.DWORD, ctypes.c_size_t]
 user32.MapVirtualKeyW.argtypes = [wt.UINT, wt.UINT]
 user32.GetKeyNameTextW.argtypes = [wt.LONG, wt.LPWSTR, ctypes.c_int]
+shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+shell32.ShellExecuteW.argtypes = [wt.HWND, wt.LPCWSTR, wt.LPCWSTR, wt.LPCWSTR, wt.LPCWSTR, ctypes.c_int]
+shell32.ShellExecuteW.restype = ctypes.c_ssize_t  # HINSTANCE, used as a status code
 user32.AllowSetForegroundWindow.argtypes = [wt.DWORD]
 user32.SetForegroundWindow.argtypes = [wt.HWND]
 kernel32.GetModuleHandleW.argtypes = [wt.LPCWSTR]
@@ -1301,7 +1304,9 @@ class SettingsDialog(QDialog):
         if folder:
             path = QFileDialog.getExistingDirectory(self, "Choose folder", str(Path.home()))
         else:
-            path, _ = QFileDialog.getOpenFileName(self, "Choose file", str(Path.home()))
+            # keep shortcuts as .lnk: resolving them to the target exe would drop their "Start in" folder
+            path, _ = QFileDialog.getOpenFileName(self, "Choose file", str(Path.home()),
+                                                  options=QFileDialog.DontResolveSymlinks)
         if path:
             self._add_paths([path], replace_row=row if replace else None)
 
@@ -1525,10 +1530,15 @@ class OrbitApp(QObject):
             self.tray.showMessage("Orbit", f"Not found:\n{path}", QSystemTrayIcon.Warning, 4000)
             return
         user32.AllowSetForegroundWindow(0xFFFFFFFF)  # ASFW_ANY: let Explorer come to the front
-        try:
-            os.startfile(path)
-        except OSError as e:
-            self.tray.showMessage("Orbit", f"Could not open {path}:\n{e}", QSystemTrayIcon.Warning, 4000)
+        # Start programs in their own folder, like a double-click in Explorer does. Without this they inherit
+        # Orbit's working folder, and apps that load files by relative path (OBS: locale/en-US.ini) fail.
+        # Shortcuts (.lnk) and folders get no folder, so a shortcut's own "Start in" still applies.
+        workdir = None
+        if os.path.isfile(path) and not path.lower().endswith(".lnk"):
+            workdir = os.path.dirname(path)
+        result = shell32.ShellExecuteW(None, "open", path, None, workdir, 1)  # SW_SHOWNORMAL
+        if result <= 32:  # ShellExecute reports errors as values up to 32
+            self.tray.showMessage("Orbit", f"Could not open {path}\n(error {result})", QSystemTrayIcon.Warning, 4000)
 
     def open_settings(self):
         if self.settings is not None:
