@@ -1,7 +1,7 @@
 # Orbit
 
-A radial menu for Windows that opens your folders and files. Hold a hotkey, flick the mouse toward a
-folder, let go, and it opens in Explorer.
+A radial menu for Windows that opens your folders and files, or switches between the windows you have
+open. Hold a hotkey, flick the mouse toward a slot, let go, and it opens.
 
 ![Orbit](docs/preview.png)
 
@@ -21,6 +21,9 @@ folder, let go, and it opens in Explorer.
 - **Multiple wheels**, each with its own hotkey, e.g. <kbd>Alt</kbd>+<kbd>Q</kbd> for projects and
   <kbd>Alt</kbd>+<kbd>W</kbd> for work. Two wheels can never share a hotkey.
 - Up to 12 slots per page and as many pages as you like. A slot can be a folder or any file.
+- **Open windows wheel**: set a wheel's type to *Open windows* and it fills itself with the windows you
+  have open each time you press its hotkey, most recently used first, labelled with their titles.
+  Pick one to bring it to the front, a quicker Alt+Tab. Browser tabs inside one window count as one slot.
 - Add slots by browsing, or by dragging folders and files from Explorer onto the slot list.
 - **23 built-in themes** plus custom colors, opacity and size, with a live preview.
 - Hotkeys can be any key combination or a side mouse button.
@@ -49,8 +52,9 @@ Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd> (or double-click the tray ico
 
 ![Setting: slots](docs/settings-slots.png)
 
-- **Wheels tab:** pick a wheel, set its hotkey and center text, then fill its pages with slots.
-  *Change target…* also renames the slot after the new folder.
+- **Wheels tab:** pick a wheel, set its hotkey, center text and type (*Folders and files* or
+  *Open windows*), then fill its pages with slots. *Change target…* also renames the slot after the
+  new folder. An *Open windows* wheel has no slots to set up.
 - **Appearance:** choose a theme or your own colors, opacity and size. Hover over the preview to see
   the highlight.
 - **General tab:** the Setting shortcut, where the wheel appears (at the cursor or the screen center),
@@ -66,7 +70,9 @@ Your settings are saved to `%APPDATA%\Orbit\config.json`, with the previous vers
 
 Orbit uses a global keyboard and mouse hook, which is how it notices your hotkey while another app is
 focused. It only reacts to its own hotkeys, plus Esc, clicks and scrolling while a wheel is open.
-It doesn't record or store keystrokes, and it never connects to the internet. The whole app is
+It doesn't record or store keystrokes, and it never connects to the internet. An *Open windows* wheel
+reads the titles and icons of your open windows only when you press its hotkey, to draw the wheel;
+nothing is saved or sent anywhere. The whole app is
 [one Python file](orbit.pyw) you can read.
 
 ## Run from source

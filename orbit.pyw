@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Orbit"
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 FROZEN = getattr(sys, "frozen", False)  # running as a PyInstaller exe
 # program folder: where the exe (built version) or this .pyw file lives
 APP_DIR = Path(sys.executable).parent if FROZEN else Path(__file__).resolve().parent
@@ -112,9 +112,13 @@ def theme_from_preset(name, base=None):
     return theme
 
 
-def new_wheel(name, hotkey, title, slots=()):
+WHEEL_TYPES = {"folders": "Folders and files", "windows": "Open windows"}
+
+
+def new_wheel(name, hotkey, title, slots=(), kind="folders"):
     # title: text in the wheel center while no slot is highlighted
-    return {"name": name, "hotkey": hotkey, "title": title, "theme": theme_from_preset("Dark"),
+    # kind: "folders" holds the slots you set up; "windows" fills itself with the open windows each time
+    return {"name": name, "type": kind, "hotkey": hotkey, "title": title, "theme": theme_from_preset("Dark"),
             "pages": [{"name": "Main", "slots": list(slots)}]}
 
 
@@ -155,6 +159,8 @@ def _read_config(path):
         if not w.get("pages"):
             w["pages"] = [{"name": "Main", "slots": []}]
         w["theme"] = {**theme_from_preset("Dark"), **w.get("theme", {})}
+        if w.get("type") not in WHEEL_TYPES:
+            w["type"] = "folders"
     return base
 
 
@@ -674,6 +680,119 @@ class WheelOverlay(QWidget):
         p.end()
 
 
+# ---------------------------------------------------------------- open windows
+
+GW_OWNER, GWL_EXSTYLE = 4, -20
+WS_EX_TOOLWINDOW, WS_EX_APPWINDOW, WS_EX_NOACTIVATE = 0x80, 0x40000, 0x08000000
+DWMWA_CLOAKED = 14
+SHELL_CLASSES = {"Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"}
+
+dwmapi = ctypes.WinDLL("dwmapi")
+dwmapi.DwmGetWindowAttribute.argtypes = [wt.HWND, wt.DWORD, ctypes.c_void_p, wt.DWORD]
+WNDENUMPROC = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+user32.EnumWindows.argtypes = [WNDENUMPROC, wt.LPARAM]
+user32.IsWindowVisible.argtypes = [wt.HWND]
+user32.IsWindow.argtypes = [wt.HWND]
+user32.IsIconic.argtypes = [wt.HWND]
+user32.ShowWindow.argtypes = [wt.HWND, ctypes.c_int]
+user32.GetWindow.argtypes = [wt.HWND, wt.UINT]
+user32.GetWindow.restype = wt.HWND
+user32.GetWindowLongPtrW.argtypes = [wt.HWND, ctypes.c_int]
+user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t
+user32.GetWindowTextLengthW.argtypes = [wt.HWND]
+user32.GetWindowTextW.argtypes = [wt.HWND, wt.LPWSTR, ctypes.c_int]
+user32.GetClassNameW.argtypes = [wt.HWND, wt.LPWSTR, ctypes.c_int]
+user32.GetWindowThreadProcessId.argtypes = [wt.HWND, ctypes.POINTER(wt.DWORD)]
+user32.GetForegroundWindow.restype = wt.HWND
+kernel32.OpenProcess.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
+kernel32.OpenProcess.restype = wt.HANDLE
+kernel32.QueryFullProcessImageNameW.argtypes = [wt.HANDLE, wt.DWORD, wt.LPWSTR, ctypes.POINTER(wt.DWORD)]
+kernel32.CloseHandle.argtypes = [wt.HANDLE]
+
+
+def _process_path(pid):
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return ""
+    try:
+        size = wt.DWORD(1024)
+        buf = ctypes.create_unicode_buffer(size.value)
+        return buf.value if kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)) else ""
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def open_windows():
+    """The windows Alt+Tab would list, most recently used first.
+
+    EnumWindows walks the z-order from the top, which is also the order of recent use. The filters
+    follow Alt+Tab: visible, unowned top-level windows with a title, no tool windows, and nothing
+    cloaked (that skips windows on other virtual desktops and suspended Store apps).
+    """
+    own_pid = os.getpid()
+    found = []
+
+    def check(hwnd, _):
+        if not user32.IsWindowVisible(hwnd) or user32.GetWindow(hwnd, GW_OWNER):
+            return True
+        ex = user32.GetWindowLongPtrW(hwnd, GWL_EXSTYLE)
+        if ex & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE) and not ex & WS_EX_APPWINDOW:
+            return True
+        cloaked = wt.DWORD()
+        dwmapi.DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
+        if cloaked.value:
+            return True
+        length = user32.GetWindowTextLengthW(hwnd)
+        if not length:
+            return True
+        cls = ctypes.create_unicode_buffer(64)
+        user32.GetClassNameW(hwnd, cls, 64)
+        if cls.value in SHELL_CLASSES:
+            return True
+        pid = wt.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value == own_pid:
+            return True
+        title = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, title, length + 1)
+        exe = _process_path(pid.value)
+        found.append({"name": title.value, "path": exe, "detail": Path(exe).name if exe else "", "hwnd": hwnd})
+        return True
+
+    user32.EnumWindows(WNDENUMPROC(check), 0)
+    return found
+
+
+def window_pages():
+    """Pages for an "Open windows" wheel: the open windows, 12 per page."""
+    windows = open_windows()
+    if not windows:
+        return [{"name": "Open windows", "slots": [], "empty": "No open windows right now."}]
+    chunks = [windows[i:i + MAX_SLOTS] for i in range(0, len(windows), MAX_SLOTS)]
+    return [{"name": "Open windows" if i == 0 else f"Open windows {i + 1}", "slots": c} for i, c in enumerate(chunks)]
+
+
+def activate_window(hwnd):
+    """Bring a window to the front, restoring it if minimized. Return False if it no longer exists."""
+    if not user32.IsWindow(hwnd):
+        return False
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+    if not user32.SetForegroundWindow(hwnd):
+        # Windows only lets the process that sent the last input change the foreground window;
+        # a synthetic key press makes Orbit that process, then the request is allowed
+        HotkeyHook._tap_mask_key()
+        user32.SetForegroundWindow(hwnd)
+    return True
+
+
+def slot_icon(slot):
+    # a window slot uses its program's icon; a slot without a known program gets a generic one
+    if not slot["path"]:
+        return QApplication.style().standardIcon(QApplication.style().StandardPixmap.SP_DesktopIcon).pixmap(40, 40)
+    return path_icon(slot["path"])
+
+
 def _readable_on(c):
     """A text color that is readable on top of color c."""
     return QColor(20, 20, 24) if 0.299 * c.red() + 0.587 * c.green() + 0.114 * c.blue() > 150 else QColor(240, 240, 244)
@@ -717,7 +836,7 @@ def paint_wheel(p, pages, page, hover, title, theme):
                 p.drawPath(path)
             a = math.radians(mid)
             pos = QPointF(math.cos(a) * rm, math.sin(a) * rm)
-            pix = path_icon(slot["path"])
+            pix = slot_icon(slot)
             p.drawPixmap(QRectF(pos.x() - 18, pos.y() - 30, 36, 36), pix, QRectF(pix.rect()))
             p.setFont(name_font)
             p.setPen(hi_text if sel else slice_text)
@@ -736,13 +855,14 @@ def paint_wheel(p, pages, page, hover, title, theme):
     box = QRectF(-R_IN + 12, -R_IN + 14, 2 * R_IN - 24, 2 * R_IN - 28)
     if hover is not None:
         slot = slots[hover]
-        text, sub = slot["name"], os.path.expandvars(slot["path"])
+        # an open-window slot shows its program in the center; a folder/file slot shows its path
+        text, sub = slot["name"], slot.get("detail") or os.path.expandvars(slot["path"])
         title_col = QColor(center_text)
     else:
         page_name = pages[page]["name"] if pages else ""
         text = title or page_name
         if not n:
-            sub = "Empty page. Add slots in Setting."
+            sub = pages[page].get("empty", "Empty page. Add slots in Setting.") if pages else ""
         elif len(pages) > 1 and title:
             sub = page_name  # keep the page name visible while scrolling between pages
         else:
@@ -754,12 +874,22 @@ def paint_wheel(p, pages, page, hover, title, theme):
     f1 = QFont("Segoe UI", 11, QFont.Bold)
     p.setFont(f1)
     p.setPen(title_col)
-    p.drawText(QRectF(box.left(), box.top() + 18, box.width(), 24), Qt.AlignCenter,
-               QFontMetrics(f1).elidedText(text, Qt.ElideRight, int(box.width())))
+    sub_top = box.top() + 44
+    if QFontMetrics(f1).horizontalAdvance(text) <= box.width():
+        p.drawText(QRectF(box.left(), box.top() + 18, box.width(), 24), Qt.AlignCenter, text)
+    else:
+        # long names (window titles especially) get two smaller lines instead of being cut after a few words
+        f1 = QFont("Segoe UI", 9, QFont.Bold)
+        fm1 = QFontMetrics(f1)
+        p.setFont(f1)
+        p.drawText(QRectF(box.left(), box.top() + 6, box.width(), fm1.lineSpacing() * 2 + 2),
+                   Qt.AlignHCenter | Qt.AlignBottom | Qt.TextWordWrap,
+                   fm1.elidedText(text, Qt.ElideRight, int(box.width() * 2 - 16)))
+        sub_top = box.top() + 50
     f2 = QFont("Segoe UI", 8)
     p.setFont(f2)
     p.setPen(sub_col)
-    p.drawText(QRectF(box.left(), box.top() + 44, box.width(), 40), Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap,
+    p.drawText(QRectF(box.left(), sub_top, box.width(), 40), Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap,
                QFontMetrics(f2).elidedText(sub, Qt.ElideMiddle, int(box.width() * 2 - 20)))
     # page indicator dots
     if len(pages) > 1:
@@ -784,7 +914,8 @@ class WheelPreview(QWidget):
         self.theme = theme_from_preset("Dark")
 
     def set_wheel(self, wheel):
-        self.pages, self.page, self.title, self.theme = wheel["pages"], 0, wheel.get("title", ""), wheel["theme"]
+        pages = window_pages() if wheel.get("type") == "windows" else wheel["pages"]
+        self.pages, self.page, self.title, self.theme = pages, 0, wheel.get("title", ""), wheel["theme"]
         self.hover = 0 if self.pages and self.pages[0]["slots"] else None
         self.update()
 
@@ -1030,6 +1161,15 @@ class SettingsDialog(QDialog):
         form = QFormLayout()
         form.addRow("Hotkey (hold):", self.wheel_hotkey_btn)
         form.addRow("Center text:", self.wheel_title)
+        self.wheel_type = QComboBox()
+        for kind, label in WHEEL_TYPES.items():
+            self.wheel_type.addItem(label, kind)
+        self.wheel_type.activated.connect(self._type_changed)
+        form.addRow("Type:", self.wheel_type)
+        self.type_hint = QLabel("This wheel fills itself with the windows that are open when you press its hotkey, "
+                                "most recently used first. Pick one to bring it to the front.")
+        self.type_hint.setWordWrap(True)
+        form.addRow("", self.type_hint)
 
         self.page_list = QListWidget()
         self.page_list.setMaximumWidth(180)
@@ -1086,7 +1226,7 @@ class SettingsDialog(QDialog):
         body = QHBoxLayout(slots_tab)
         body.addLayout(left)
         body.addLayout(right, 1)
-        inner = QTabWidget()
+        inner = self.inner_tabs = QTabWidget()
         inner.addTab(slots_tab, "Slots")
         inner.addTab(self._build_appearance(), "Appearance")
 
@@ -1204,7 +1344,21 @@ class SettingsDialog(QDialog):
         self.page_list.blockSignals(False)
         self.page_list.setCurrentRow(0)
         self._show_page()
+        self._show_type()
+
+    def _show_type(self):
+        # an "Open windows" wheel has no slots to set up, so only its Appearance tab applies
+        windows = self._wheel().get("type") == "windows"
+        self.wheel_type.setCurrentIndex(self.wheel_type.findData(self._wheel().get("type", "folders")))
+        self.type_hint.setVisible(windows)
+        self.inner_tabs.setTabEnabled(0, not windows)
+        if windows:
+            self.inner_tabs.setCurrentIndex(1)
         self._show_appearance()
+
+    def _type_changed(self, _i):
+        self._wheel()["type"] = self.wheel_type.currentData()
+        self._show_type()
 
     def _wheel_hotkey_changed(self, old):
         if self._check_hotkey(self.wheel_hotkey_btn, old, self._wheel()["name"]):
@@ -1265,9 +1419,10 @@ class SettingsDialog(QDialog):
         self._loading = False
         n = len(pg["slots"]) if pg else 0
         self.count_label.setText(f"{n} / {MAX_SLOTS} slots on this page")
-        self.preview.page = max(0, self.page_list.currentRow())
-        self.preview.hover = None if not n or (self.preview.hover or 0) >= n else self.preview.hover
-        self.preview.update()
+        if self._wheel().get("type") != "windows":  # an "Open windows" preview shows live windows instead
+            self.preview.page = max(0, self.page_list.currentRow())
+            self.preview.hover = None if not n or (self.preview.hover or 0) >= n else self.preview.hover
+            self.preview.update()
         self.b_add_dir.setEnabled(n < MAX_SLOTS)
         self.b_add_file.setEnabled(n < MAX_SLOTS)
         if select is not None and 0 <= select < n:
@@ -1558,8 +1713,12 @@ class OrbitApp(QObject):
         w = self.cfg["wheels"][index]
         self.active_wheel = index
         self.hook.wheel_open = True
-        resume = self.cfg.get("open_page", "first") == "last"
-        self.overlay.open(w["pages"], self.page_of.get(index, 0) if resume else 0, self.cfg.get("position", "cursor"),
+        if w.get("type") == "windows":
+            pages, page = window_pages(), 0  # read fresh every time, so the wheel matches what is open now
+        else:
+            resume = self.cfg.get("open_page", "first") == "last"
+            pages, page = w["pages"], self.page_of.get(index, 0) if resume else 0
+        self.overlay.open(pages, page, self.cfg.get("position", "cursor"),
                           self.cfg.get("dim", True), w.get("title", ""), w["theme"])
 
     def hide_wheel(self):
@@ -1578,6 +1737,11 @@ class OrbitApp(QObject):
             self.launch(slot)
 
     def launch(self, slot):
+        if "hwnd" in slot:  # a slot of an "Open windows" wheel
+            if not activate_window(slot["hwnd"]):
+                self.tray.showMessage("Orbit", f"This window is no longer open:\n{slot['name']}",
+                                      QSystemTrayIcon.Warning, 3000)
+            return
         path = os.path.expandvars(slot["path"])
         if not os.path.exists(path):
             self.tray.showMessage("Orbit", f"Not found:\n{path}", QSystemTrayIcon.Warning, 4000)
