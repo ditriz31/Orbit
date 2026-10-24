@@ -33,6 +33,20 @@ open. Hold a hotkey, flick the mouse toward a slot, let go, and it opens.
 
 ![All 23 built-in themes](docs/theme-gallery.png)
 
+### Switch windows from the wheel
+
+Give a wheel the *Open windows* type and its hotkey shows every window you have open, newest first or
+alphabetically. Point at one and release, and it comes to the front.
+
+![Hold Alt+W, point at a window, release to bring it to the front](docs/demo-open-windows.gif)
+
+### Open folders as Explorer tabs
+
+On Windows 11, folders can open as a new tab in the Explorer window you already have open instead of
+piling up new windows. Turn it on in Setting > General > *Open folders in*.
+
+![A folder picked from the wheel opens as a new tab](docs/demo-explorer-tabs.gif)
+
 ## Install
 
 Download from the [latest release](https://github.com/ditriz31/Orbit/releases/latest):
@@ -63,6 +77,10 @@ Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd> (or double-click the tray ico
   or on the page you used last, screen dimming and *Start automatically when I sign in to Windows*.
 
 ![Setting: appearance](docs/settings-appearance.png)
+
+![Setting: an Open windows wheel and its order](docs/settings-open-windows.png)
+
+![Setting: General tab](docs/settings-general.png)
 
 Your settings are saved to `%APPDATA%\Orbit\config.json`, with the previous version kept as
 `config.bak.json`. To move your setup to another PC, copy that file over.
