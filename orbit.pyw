@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Orbit"
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.0.3"
 FROZEN = getattr(sys, "frozen", False)  # running as a PyInstaller exe
 # program folder: where the exe (built version) or this .pyw file lives
 APP_DIR = Path(sys.executable).parent if FROZEN else Path(__file__).resolve().parent
@@ -118,7 +118,8 @@ WHEEL_TYPES = {"folders": "Folders and files", "windows": "Open windows"}
 def new_wheel(name, hotkey, title, slots=(), kind="folders"):
     # title: text in the wheel center while no slot is highlighted
     # kind: "folders" holds the slots you set up; "windows" fills itself with the open windows each time
-    return {"name": name, "type": kind, "hotkey": hotkey, "title": title, "theme": theme_from_preset("Dark"),
+    return {"name": name, "type": kind, "order": "recent", "hotkey": hotkey, "title": title,
+            "theme": theme_from_preset("Dark"),
             "pages": [{"name": "Main", "slots": list(slots)}]}
 
 
@@ -161,6 +162,8 @@ def _read_config(path):
         w["theme"] = {**theme_from_preset("Dark"), **w.get("theme", {})}
         if w.get("type") not in WHEEL_TYPES:
             w["type"] = "folders"
+        if w.get("order") not in WINDOW_ORDERS:
+            w["order"] = "recent"
     return base
 
 
@@ -763,9 +766,14 @@ def open_windows():
     return found
 
 
-def window_pages():
+WINDOW_ORDERS = {"recent": "Most recently used first", "name": "Alphabetical by title"}
+
+
+def window_pages(order="recent"):
     """Pages for an "Open windows" wheel: the open windows, 12 per page."""
     windows = open_windows()
+    if order == "name":
+        windows.sort(key=lambda w: w["name"].casefold())
     if not windows:
         return [{"name": "Open windows", "slots": [], "empty": "No open windows right now."}]
     chunks = [windows[i:i + MAX_SLOTS] for i in range(0, len(windows), MAX_SLOTS)]
@@ -914,7 +922,7 @@ class WheelPreview(QWidget):
         self.theme = theme_from_preset("Dark")
 
     def set_wheel(self, wheel):
-        pages = window_pages() if wheel.get("type") == "windows" else wheel["pages"]
+        pages = window_pages(wheel.get("order", "recent")) if wheel.get("type") == "windows" else wheel["pages"]
         self.pages, self.page, self.title, self.theme = pages, 0, wheel.get("title", ""), wheel["theme"]
         self.hover = 0 if self.pages and self.pages[0]["slots"] else None
         self.update()
@@ -1166,10 +1174,16 @@ class SettingsDialog(QDialog):
             self.wheel_type.addItem(label, kind)
         self.wheel_type.activated.connect(self._type_changed)
         form.addRow("Type:", self.wheel_type)
-        self.type_hint = QLabel("This wheel fills itself with the windows that are open when you press its hotkey, "
-                                "most recently used first. Pick one to bring it to the front.")
+        self.type_hint = QLabel("This wheel fills itself with the windows that are open when you press its hotkey. "
+                                "Pick one to bring it to the front.")
         self.type_hint.setWordWrap(True)
         form.addRow("", self.type_hint)
+        self.window_order = QComboBox()
+        for order, label in WINDOW_ORDERS.items():
+            self.window_order.addItem(label, order)
+        self.window_order.activated.connect(self._order_changed)
+        self.window_order_label = QLabel("Order:")
+        form.addRow(self.window_order_label, self.window_order)
 
         self.page_list = QListWidget()
         self.page_list.setMaximumWidth(180)
@@ -1351,6 +1365,9 @@ class SettingsDialog(QDialog):
         windows = self._wheel().get("type") == "windows"
         self.wheel_type.setCurrentIndex(self.wheel_type.findData(self._wheel().get("type", "folders")))
         self.type_hint.setVisible(windows)
+        self.window_order.setVisible(windows)
+        self.window_order_label.setVisible(windows)
+        self.window_order.setCurrentIndex(self.window_order.findData(self._wheel().get("order", "recent")))
         self.inner_tabs.setTabEnabled(0, not windows)
         if windows:
             self.inner_tabs.setCurrentIndex(1)
@@ -1359,6 +1376,10 @@ class SettingsDialog(QDialog):
     def _type_changed(self, _i):
         self._wheel()["type"] = self.wheel_type.currentData()
         self._show_type()
+
+    def _order_changed(self, _i):
+        self._wheel()["order"] = self.window_order.currentData()
+        self._show_appearance()  # the preview lists the open windows in the chosen order
 
     def _wheel_hotkey_changed(self, old):
         if self._check_hotkey(self.wheel_hotkey_btn, old, self._wheel()["name"]):
@@ -1714,7 +1735,8 @@ class OrbitApp(QObject):
         self.active_wheel = index
         self.hook.wheel_open = True
         if w.get("type") == "windows":
-            pages, page = window_pages(), 0  # read fresh every time, so the wheel matches what is open now
+            # read fresh every time, so the wheel matches what is open now
+            pages, page = window_pages(w.get("order", "recent")), 0
         else:
             resume = self.cfg.get("open_page", "first") == "last"
             pages, page = w["pages"], self.page_of.get(index, 0) if resume else 0

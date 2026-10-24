@@ -22,7 +22,8 @@ open. Hold a hotkey, flick the mouse toward a slot, let go, and it opens.
   <kbd>Alt</kbd>+<kbd>W</kbd> for work. Two wheels can never share a hotkey.
 - Up to 12 slots per page and as many pages as you like. A slot can be a folder or any file.
 - **Open windows wheel**: set a wheel's type to *Open windows* and it fills itself with the windows you
-  have open each time you press its hotkey, most recently used first, labelled with their titles.
+  have open each time you press its hotkey, labelled with their titles. Order them most recently used
+  first (the default) or alphabetically.
   Pick one to bring it to the front, a quicker Alt+Tab. Browser tabs inside one window count as one slot.
 - Add slots by browsing, or by dragging folders and files from Explorer onto the slot list.
 - **23 built-in themes** plus custom colors, opacity and size, with a live preview.
@@ -54,7 +55,7 @@ Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Q</kbd> (or double-click the tray ico
 
 - **Wheels tab:** pick a wheel, set its hotkey, center text and type (*Folders and files* or
   *Open windows*), then fill its pages with slots. *Change target…* also renames the slot after the
-  new folder. An *Open windows* wheel has no slots to set up.
+  new folder. An *Open windows* wheel has no slots to set up; choose its order instead.
 - **Appearance:** choose a theme or your own colors, opacity and size. Hover over the preview to see
   the highlight.
 - **General tab:** the Setting shortcut, where the wheel appears (at the cursor or the screen center),
