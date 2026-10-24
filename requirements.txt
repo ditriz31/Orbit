@@ -1,2 +1,3 @@
 PySide6==6.12.0
 pywin32==311
+comtypes==1.4.11

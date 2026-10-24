@@ -43,7 +43,8 @@ alphabetically. Point at one and release, and it comes to the front.
 ### Open folders as Explorer tabs
 
 On Windows 11, folders can open as a new tab in the Explorer window you already have open instead of
-piling up new windows. Turn it on in Setting > General > *Open folders in*.
+piling up new windows. If the folder is already open in a tab, Orbit switches to that tab rather than
+adding a duplicate. Turn it on in Setting > General > *Open folders in*.
 
 ![A folder picked from the wheel opens as a new tab](docs/demo-explorer-tabs.gif)
 

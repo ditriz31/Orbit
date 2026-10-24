@@ -8,8 +8,13 @@ Write-Host "Orbit $version"
 
 if (-not (Test-Path assets\orbit.ico)) { python tools\make_icon.py }
 
+# comtypes writes its UI Automation wrapper on first use; generate it now so the exe ships with it
+python -c "import comtypes.client; comtypes.client.GetModule('UIAutomationCore.dll')"
+if ($LASTEXITCODE) { throw "generating the UI Automation wrapper failed" }
+
 $common = @("--noconfirm", "--clean", "--windowed", "--icon", "assets\orbit.ico",
-            "--exclude-module", "tkinter", "orbit.pyw")
+            "--exclude-module", "tkinter", "--exclude-module", "numpy",  # comtypes would drag numpy in; unused
+            "--hidden-import", "comtypes.gen.UIAutomationClient", "orbit.pyw")
 
 # 1) folder build for the installer
 python -m PyInstaller @common --name Orbit --distpath dist --workpath build\onedir

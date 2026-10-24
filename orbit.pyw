@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 APP_NAME = "Orbit"
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 FROZEN = getattr(sys, "frozen", False)  # running as a PyInstaller exe
 # program folder: where the exe (built version) or this .pyw file lives
 APP_DIR = Path(sys.executable).parent if FROZEN else Path(__file__).resolve().parent
@@ -1630,6 +1630,50 @@ def _frontmost_explorer():
     return found[0] if found else None
 
 
+def _find_open_folder(path):
+    """(window handle, tab name) of an Explorer tab already showing this folder, or None."""
+    want = os.path.normcase(os.path.normpath(path))
+    for w in win32com.client.Dispatch("Shell.Application").Windows():
+        try:
+            if os.path.normcase(os.path.normpath(w.Document.Folder.Self.Path)) == want:
+                return w.HWND, w.LocationName
+        except Exception:  # browser windows, virtual folders like Home
+            pass
+    return None
+
+
+_uia = None
+
+
+def _ui_automation():
+    """(module, client) for Windows UI Automation, created on first use."""
+    global _uia
+    if _uia is None:
+        import comtypes.client
+        mod = comtypes.client.GetModule("UIAutomationCore.dll")
+        client = comtypes.client.CreateObject("{ff48dba4-60ef-4201-aa87-54103eef594e}", interface=mod.IUIAutomation)
+        _uia = (mod, client)
+    return _uia
+
+
+def _select_explorer_tab(hwnd, name):
+    """Select the tab called `name` in Explorer window hwnd. Windows offers no API for picking a tab;
+    UI Automation selects it the way a screen reader would, without keyboard focus or keystrokes."""
+    try:
+        mod, client = _ui_automation()
+        cond = client.CreatePropertyCondition(mod.UIA_ControlTypePropertyId, mod.UIA_TabItemControlTypeId)
+        items = client.ElementFromHandle(hwnd).FindAll(mod.TreeScope_Descendants, cond)
+        for i in range(items.Length):
+            item = items.GetElement(i)
+            if item.CurrentName == name:
+                pattern = item.GetCurrentPattern(mod.UIA_SelectionItemPatternId)
+                pattern.QueryInterface(mod.IUIAutomationSelectionItemPattern).Select()
+                return True
+    except Exception as e:
+        log(f"selecting the Explorer tab failed: {e!r}")
+    return False
+
+
 def _explorer_tabs(hwnd):
     """Shell window objects (one per tab) belonging to Explorer window hwnd, oldest first."""
     tabs = []
@@ -1710,6 +1754,11 @@ class OrbitApp(QObject):
             for pg in w["pages"]:
                 for s in pg["slots"]:
                     path_icon(s["path"])
+        if self.cfg.get("folder_open") == "tab" and win32gui is not None:
+            try:
+                _ui_automation()  # its first use takes a few hundred ms; pay that now, not at the first tab switch
+            except Exception as e:
+                log(f"UI Automation unavailable: {e!r}")
         ov = self.overlay
         if not ov.is_open and not ov.isVisible():
             # paint the wheel once off-screen so fonts and icons are ready
@@ -1794,6 +1843,13 @@ class OrbitApp(QObject):
         if win32gui is None:
             return False
         try:
+            found = _find_open_folder(path)
+            if found:  # already open in some tab: show that tab instead of adding a duplicate
+                hwnd, tab_name = found
+                activate_window(hwnd)
+                if len(_explorer_tabs(hwnd)) > 1:
+                    _select_explorer_tab(hwnd, tab_name)
+                return True
             hwnd = _frontmost_explorer()
             tab_host = win32gui.FindWindowEx(hwnd, 0, "ShellTabWindowClass", None) if hwnd else 0
             if not tab_host:
